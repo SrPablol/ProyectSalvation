@@ -15,6 +15,9 @@ import sys
 import time
 import argparse
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 import src.config as config
 from src.apollo_reader import read_csv
 from src.ai_personalizer import personalize
@@ -41,6 +44,12 @@ def parse_args():
         type=int,
         default=0,
         help="Max number of leads to process (0 = all)",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Skip first N leads (useful to resume after a partial run)",
     )
     parser.add_argument(
         "--delay",
@@ -84,8 +93,10 @@ def main():
         print("No leads found. Verifica el CSV y vuelve a intentar.")
         sys.exit(0)
 
+    leads = leads[args.offset:] if args.offset > 0 else leads
     to_process = leads[: args.limit] if args.limit > 0 else leads
-    print(f"Procesando {len(to_process)} de {len(leads)} leads...\n")
+    offset_note = f" (saltando primeros {args.offset})" if args.offset > 0 else ""
+    print(f"Procesando {len(to_process)} leads{offset_note}...\n")
 
     success, failed = 0, 0
 

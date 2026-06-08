@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-REQUIRED_VARS = ["GEMINI_API_KEY", "INSTANTLY_API_KEY", "INSTANTLY_CAMPAIGN_ID"]
+REQUIRED_VARS = ["GROQ_API_KEY", "INSTANTLY_API_KEY", "INSTANTLY_CAMPAIGN_ID"]
 
 def validate():
     missing = [v for v in REQUIRED_VARS if not os.getenv(v)]

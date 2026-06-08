@@ -19,10 +19,10 @@ class Lead:
     title: str
     company: str
     website: str
-    industry: str
-    employees: str
-    city: str
-    country: str
+    industry: str = ""
+    employees: str = ""
+    city: str = ""
+    country: str = ""
     linkedin: str = ""
     extra: dict = field(default_factory=dict)
 
@@ -34,22 +34,36 @@ class Lead:
         return f"{self.full_name} ({self.title}) @ {self.company} <{self.email}>"
 
 
-# Map Apollo CSV column names → Lead field names
-# Supports both Apollo's standard export format and older column names
+# Map CSV column names → Lead field names
+# Supports Apollo standard export (title case) and lowercase_underscore format
 COLUMN_MAP = {
+    # Apollo standard export
     "First Name": "first_name",
     "Last Name": "last_name",
     "Email": "email",
     "Title": "title",
-    "Company Name": "company",       # Apollo real export uses "Company Name"
-    "Company": "company",            # fallback for older exports
+    "Company Name": "company",
+    "Company": "company",
     "Website": "website",
     "Industry": "industry",
     "# Employees": "employees",
     "City": "city",
     "Country": "country",
-    "Person Linkedin Url": "linkedin",  # Apollo real export
-    "LinkedIn URL": "linkedin",         # fallback
+    "Person Linkedin Url": "linkedin",
+    "LinkedIn URL": "linkedin",
+    # Lowercase underscore format (leads-100.csv and similar exports)
+    "first_name": "first_name",
+    "last_name": "last_name",
+    "email": "email",
+    "title": "title",
+    "company": "company",
+    "domain": "website",        # fallback — overwritten by "website" if present
+    "website": "website",
+    "industry": "industry",
+    "employees": "employees",
+    "city": "city",
+    "country": "country",
+    "linkedin_url": "linkedin",
 }
 
 
@@ -60,7 +74,9 @@ def read_csv(path: str) -> list[Lead]:
     for _, row in df.iterrows():
         kwargs = {}
         for csv_col, field_name in COLUMN_MAP.items():
-            kwargs[field_name] = row.get(csv_col, "").strip()
+            val = row.get(csv_col, "").strip()
+            if val:
+                kwargs[field_name] = val
 
         # Skip rows without email
         if not kwargs.get("email"):

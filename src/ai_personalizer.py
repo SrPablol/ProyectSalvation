@@ -1,34 +1,57 @@
 """
-Uses Google Gemini (free tier) to generate personalized cold emails.
-Get your free API key at: aistudio.google.com → Get API Key
-No credit card required — 1M tokens/day free.
+Uses Groq (llama-3.3-70b-versatile) to generate personalized cold emails.
+Get your free API key at: console.groq.com
 """
 
-from google import genai
-from google.genai import types
+import re
+import time
+from groq import Groq, RateLimitError
 from src import config
 from src.apollo_reader import Lead
 from templates.email_prompt import build_system_prompt, build_user_prompt
+
+_MAX_RETRIES = 5
 
 
 def personalize(lead: Lead) -> dict:
     """
     Returns a dict with keys: subject, body, recommended_service
+    Retries on rate limit (429) by parsing the wait time from the error message.
     """
-    client = genai.Client(api_key=config.get("GEMINI_API_KEY"))
+    client = Groq(api_key=config.get("GROQ_API_KEY"))
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=build_user_prompt(lead),
-        config=types.GenerateContentConfig(
-            system_instruction=build_system_prompt(),
-            max_output_tokens=600,
-            temperature=0.7,
-        ),
-    )
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": build_system_prompt()},
+                    {"role": "user", "content": build_user_prompt(lead)},
+                ],
+                max_tokens=600,
+                temperature=0.7,
+            )
+            raw = response.choices[0].message.content.strip()
+            return _parse_response(raw)
 
-    raw = response.text.strip()
-    return _parse_response(raw)
+        except RateLimitError as e:
+            wait = _parse_wait_seconds(str(e))
+            if attempt < _MAX_RETRIES - 1:
+                print(f"  ⏳ Groq rate limit — esperando {wait}s antes de reintentar...")
+                time.sleep(wait)
+            else:
+                raise
+
+
+def _parse_wait_seconds(error_msg: str) -> int:
+    """Extract wait time from Groq rate limit error, default 60s."""
+    m = re.search(r"try again in (\d+)m(\d+(?:\.\d+)?)s", error_msg)
+    if m:
+        return int(m.group(1)) * 60 + int(float(m.group(2))) + 5
+    m = re.search(r"try again in (\d+(?:\.\d+)?)s", error_msg)
+    if m:
+        return int(float(m.group(1))) + 5
+    return 60
 
 
 def _parse_response(raw: str) -> dict:
