@@ -27,7 +27,7 @@ def send(lead: Lead, personalized: dict) -> dict:
     payload = {
         "email": lead.email,
         "campaign_id": config.get("INSTANTLY_CAMPAIGN_ID"),
-        "skip_if_in_workspace": True,
+        "skip_if_in_workspace": False,
         "firstName": lead.first_name,
         "lastName": lead.last_name,
         "companyName": lead.company,

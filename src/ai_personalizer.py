@@ -1,6 +1,6 @@
 """
 Uses Groq (llama-3.3-70b-versatile) to generate personalized cold emails.
-Get your free API key at: console.groq.com
+Falls back to Gemini (gemini-1.5-flash) if Groq quota is exhausted.
 """
 
 import re
@@ -15,9 +15,17 @@ _MAX_RETRIES = 5
 
 def personalize(lead: Lead) -> dict:
     """
-    Returns a dict with keys: subject, body, recommended_service
-    Retries on rate limit (429) by parsing the wait time from the error message.
+    Returns a dict with keys: subject, body, recommended_service.
+    Tries Groq first with retries; falls back to Gemini on quota exhaustion.
     """
+    try:
+        return _personalize_groq(lead)
+    except RateLimitError:
+        print("  ⚠️  Groq quota agotado — cambiando a Gemini...")
+        return _personalize_gemini(lead)
+
+
+def _personalize_groq(lead: Lead) -> dict:
     client = Groq(api_key=config.get("GROQ_API_KEY"))
 
     for attempt in range(_MAX_RETRIES):
@@ -41,6 +49,21 @@ def personalize(lead: Lead) -> dict:
                 time.sleep(wait)
             else:
                 raise
+
+
+def _personalize_gemini(lead: Lead) -> dict:
+    import google.generativeai as genai
+    genai.configure(api_key=config.get("GEMINI_API_KEY"))
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=build_system_prompt(),
+    )
+    response = model.generate_content(
+        build_user_prompt(lead),
+        generation_config={"max_output_tokens": 600, "temperature": 0.7},
+    )
+    raw = response.text.strip()
+    return _parse_response(raw)
 
 
 def _parse_wait_seconds(error_msg: str) -> int:
