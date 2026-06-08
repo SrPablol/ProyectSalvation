@@ -44,6 +44,8 @@ def _personalize_groq(lead: Lead) -> dict:
 
         except RateLimitError as e:
             wait = _parse_wait_seconds(str(e))
+            if wait > 30:
+                raise  # Wait too long — let caller switch to Gemini immediately
             if attempt < _MAX_RETRIES - 1:
                 print(f"  ⏳ Groq rate limit — esperando {wait}s antes de reintentar...")
                 time.sleep(wait)
@@ -52,15 +54,17 @@ def _personalize_groq(lead: Lead) -> dict:
 
 
 def _personalize_gemini(lead: Lead) -> dict:
-    import google.generativeai as genai
-    genai.configure(api_key=config.get("GEMINI_API_KEY"))
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=build_system_prompt(),
-    )
-    response = model.generate_content(
-        build_user_prompt(lead),
-        generation_config={"max_output_tokens": 600, "temperature": 0.7},
+    from google import genai
+    from google.genai import types
+    client = genai.Client(api_key=config.get("GEMINI_API_KEY"))
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=build_user_prompt(lead),
+        config=types.GenerateContentConfig(
+            system_instruction=build_system_prompt(),
+            max_output_tokens=600,
+            temperature=0.7,
+        ),
     )
     raw = response.text.strip()
     return _parse_response(raw)
